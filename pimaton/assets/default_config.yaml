@@ -3,6 +3,8 @@
 picamera:
     # Where to store taken pictures.
     photo_directory: "/home/pi/pimaton_pictures"
+    # Format of the taken picture, png or jpg.
+    picture_format: 'png'
     number_of_pictures_to_take: 6
     time_before_first_picture: 4
     time_between_pictures: 2
@@ -40,11 +42,13 @@ pimaton:
     ui_mode: 'tui'
     inputs:
         - "keyboard" # React on "enter" key.
-        # - GPIO # Not available yet.
+        # - GPIO # Not available yet. See full example file.
 
 # Image options.
 image:
     print_pic:
+        # Format of the generated image, png or jpg.
+        image_format: 'png'
         # Prefix for the generated image.
         generated_prefix_name: "pimaton"
         # Path for the template jpg to use if any. 

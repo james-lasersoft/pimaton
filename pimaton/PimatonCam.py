@@ -1,6 +1,7 @@
-from time import sleep, strftime
+from time import sleep
 import datetime
 import logging
+import socket
 
 logging.basicConfig()
 logger = logging.getLogger("Pimaton")
@@ -42,12 +43,14 @@ class PimatonCam:
         self.countdown(self.config['time_before_first_picture'])
 
         for i in range(self.config['number_of_pictures_to_take']):
-            filename = self.config['picture_prefix_name'] + "_" + unique_key + \
-                '_' + datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S') + ".jpg"
+            filename = self.config['picture_prefix_name'].replace(
+                '%%hostname%%', socket.gethostname()) + "_" + unique_key + \
+                '_' + datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S') + "." + \
+                self.config['picture_format']
             taken_pictures.append(filename)
 
             logger.debug('Taking picture %s' % i)
-            self.capture(filename)
+            self.capture(filename, unique_key)
             logger.debug("Photo (" + filename + ") saved: " + filename)
             self.countdown(self.config['time_between_pictures'])
 
@@ -62,12 +65,17 @@ class PimatonCam:
             sleep(1)
         self.picamera.annotate_text = ''
 
-    def capture(self, filename):
-        logger.debug("Capturing picture %s in %s" %
-                     (filename, self.config['photo_directory']))
+    def capture(self, filename, unique_key):
+        logger.debug(
+            "Capturing picture %s in %s" %
+            (filename,
+             self.config['photo_directory'].replace(
+                 '%%uuid%%',
+                 unique_key)))
         try:
             self.picamera.capture(
-                self.config['photo_directory'] + '/' + filename)
+                self.config['photo_directory'].replace(
+                    '%%uuid%%', unique_key) + '/' + filename)
         except Exception as e:
             raise PimatonCamExceptions(
                 'An error occured capturing the picture: %s' % e)
@@ -93,6 +101,11 @@ class PimatonCam:
             self.picamera.rotation = config['settings']['rotation']
             self.picamera.hflip = config['settings']['hflip']
             self.picamera.vflip = config['settings']['vflip']
+
+            if 'zoom_values' in config['settings']:
+                zv = config['settings']['zoom_values']
+                logger.debug('Zoom is specified: %s' % zv)
+                self.picamera.zoom = (zv[0], zv[1], zv[2], zv[3])
 
             self.picamera.annotate_text = ''
             self.picamera.annotate_text_size = config['settings']['annotate_text_size']

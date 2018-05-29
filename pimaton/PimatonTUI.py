@@ -6,10 +6,27 @@ from PimatonExceptions import PimatonExceptions
 logging.basicConfig()
 logger = logging.getLogger("Pimaton")
 
+try:
+    import RPi.GPIO as GPIO
+except BaseException:
+    logger.debug('Couldn\'t load RPi.GPIO library')
+
 
 class PimatonTUI(PimatonUI, object):
     def __init__(self, pimaton):
         super(PimatonTUI, self).__init__(pimaton)
+
+        if 'GPIO' in self.pimaton.config['pimaton']['inputs']:
+            logger.debug(
+                'GPIO input is enabled - Start button configured on channel %s' %
+                self.pimaton.config['GPIO']['start_button'])
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            GPIO.setup(
+                self.pimaton.config['GPIO']['start_button'],
+                GPIO.IN,
+                pull_up_down=GPIO.PUD_UP)
+            self.reset_gpio(self.pimaton.config['GPIO']['start_button'])
 
     def mainloop(self):
         while True:
@@ -31,7 +48,8 @@ class PimatonTUI(PimatonUI, object):
             to_print = self.pimaton.generate_picture(
                 taken_pictures,
                 filename,
-                qrcode)
+                qrcode,
+                unique_key)
 
             if self.pimaton.is_print_enabled() is True:
                 self.pimaton.print_picture(to_print)
@@ -45,9 +63,16 @@ class PimatonTUI(PimatonUI, object):
                 break
 
             self.pimaton.wait_before_next_iteration()
+            if 'GPIO' in self.pimaton.config['pimaton']['inputs']:
+                self.reset_gpio(self.pimaton.config['GPIO']['start_button'])
 
     def is_triggered(self):
-        if 'keyboard' in self.pimaton.config['pimaton']['inputs']:
+        if 'GPIO' in self.pimaton.config['pimaton']['inputs']:
+            if self.gpio_triggered is True:
+                logger.debug('GPIO is ON and has been triggered.')
+                return True
+        # ELIF because keyboard and GPIO are not compatible yet.
+        elif 'keyboard' in self.pimaton.config['pimaton']['inputs']:
             logger.debug('Waiting for start key to be pressed')
             # TODO: This will need to change for being able to manage both
             # keyboard and GPIO.
@@ -57,6 +82,28 @@ class PimatonTUI(PimatonUI, object):
             # No other input compatible with TUI yet, raise an alert.
             raise PimatonTUIExceptions(
                 'TUI mode has no compatible inputs configured.')
+
+        return False
+
+    def gpio_button_pressed(self, channel):
+        logger.debug('GPIO button pressed callback.')
+        self.gpio_triggered = True
+        # To avoid multiple trigger, let's disable the event for now.
+        self.remove_start_detection(channel)
+
+    def remove_start_detection(self, channel):
+        logger.debug('Removing event detection on channel %s' % channel)
+        GPIO.remove_event_detect(channel)
+
+    def reset_gpio(self, channel):
+        logger.debug('GPIO reset callback.')
+        self.gpio_triggered = False
+        logger.debug('Start listening to event on channel %s' % channel)
+        GPIO.add_event_detect(
+            channel,
+            GPIO.BOTH,
+            callback=self.gpio_button_pressed,
+            bouncetime=200)
 
 
 class PimatonTUIExceptions(PimatonExceptions):
